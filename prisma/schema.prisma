@@ -1,0 +1,156 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider   = "prisma-client-js"
+  engineType = "library"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  JOB_SEEKER
+  FREELANCER
+  FOUNDER
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum InteractionType {
+  CALL
+  MEETING
+  EMAIL
+  LINKEDIN_MESSAGE
+  NOTE
+  STATUS_CHANGE
+  FOLLOW_UP
+}
+
+model UserProfile {
+  id        String    @id @default(uuid())
+  clerkId   String    @unique
+  email     String    @unique
+  name      String?
+  role      UserRole?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  contacts      Contact[]
+  opportunities Opportunity[]
+  followUps     FollowUp[]
+  meetings      Meeting[]
+  notes         GlobalNote?
+  interactions  Interaction[]
+}
+
+model Contact {
+  id          String   @id @default(uuid())
+  userId      String
+  name        String
+  company     String?
+  role        String?
+  email       String?
+  phone       String?
+  linkedin    String?
+  website     String?
+  tags        String[] // Stored as tags list
+  notes       String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user         UserProfile   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  opportunities Opportunity[]
+  followUps     FollowUp[]
+  meetings      Meeting[]     @relation("MeetingParticipants")
+  interactions  Interaction[]
+
+  @@index([userId])
+}
+
+model Opportunity {
+  id             String    @id @default(uuid())
+  userId         String
+  contactId      String?
+  title          String
+  value          Float?    // Used for Freelancer value, Founder fundraising target, etc.
+  status         String    // Dynamic based on UserRole (e.g., "Interview Scheduled", "Proposal Sent")
+  priority       Priority  @default(MEDIUM)
+  notes          String?   @db.Text
+  nextActionDate DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  user         UserProfile   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contact      Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  followUps    FollowUp[]
+  interactions Interaction[]
+
+  @@index([userId])
+}
+
+model FollowUp {
+  id            String    @id @default(uuid())
+  userId        String
+  contactId     String?
+  opportunityId String?
+  title         String
+  dueDate       DateTime
+  completed     Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user        UserProfile  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contact     Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  opportunity Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+
+  @@index([userId, dueDate])
+}
+
+model Meeting {
+  id             String   @id @default(uuid())
+  userId         String
+  title          String
+  meetingDate    DateTime
+  notes          String?  @db.Text
+  actionItems    String[] // List of text action items
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user         UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  participants Contact[]   @relation("MeetingParticipants")
+
+  @@index([userId, meetingDate])
+}
+
+model GlobalNote {
+  id        String   @id @default(uuid())
+  userId    String   @unique // One global note drawer state per user
+  title     String?
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Interaction {
+  id            String          @id @default(uuid())
+  userId        String
+  contactId     String?
+  opportunityId String?
+  type          InteractionType
+  description   String          @db.Text // Summary of status change, call log, or LinkedIn content
+  occurredAt    DateTime        @default(now())
+
+  user        UserProfile  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contact     Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  opportunity Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+
+  @@index([userId, occurredAt])
+}
